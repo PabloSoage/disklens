@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>DiskLens</vendor>
+  <vendor_url>https://github.com/PabloSoage/disklens</vendor_url>
+  <action id="io.github.pablosoage.disklens.read-smart">
+    <description>Read disk S.M.A.R.T. data</description>
+    <message>DiskLens needs administrator rights to read the disks' S.M.A.R.T. data.</message>
+    <icon_name>drive-harddisk</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/disklens</annotate>
+  </action>
+</policyconfig>

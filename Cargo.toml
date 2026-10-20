@@ -1,0 +1,54 @@
+[package]
+name = "disklens"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Disk health (S.M.A.R.T.) for Linux with the CrystalDiskInfo logic: terminal UI, desktop GUI and web interface"
+repository = "https://github.com/PabloSoage/disklens"
+license = "MIT"
+readme = "README.md"
+keywords = ["smart", "disk", "health", "nvme", "crystaldiskinfo"]
+categories = ["command-line-utilities", "hardware-support"]
+
+[[bin]]
+name = "disklens"
+path = "src/main.rs"
+
+[features]
+default = ["gui", "web"]
+# Desktop window (egui). Leave it out on headless servers: `--no-default-features --features web`.
+gui = ["dep:eframe", "dep:egui_extras"]
+# HTTP server with the web interface and a JSON API.
+web = ["dep:axum", "dep:tokio"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"
+libc = "0.2"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+ratatui = "0.30"
+crossterm = "0.29"
+eframe = { version = "0.37", optional = true, default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
+egui_extras = { version = "0.37", optional = true }
+axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "json", "query", "tokio"] }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "macros", "net", "signal", "time", "sync"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
+
+[package.metadata.deb]
+maintainer = "Pablo Soage <p.soage@udc.es>"
+section = "admin"
+depends = "$auto"
+assets = [
+    ["target/release/disklens", "usr/bin/", "755"],
+    ["packaging/disklens.desktop", "usr/share/applications/", "644"],
+    ["packaging/disklens-web.service", "lib/systemd/system/", "644"],
+    ["packaging/io.github.pablosoage.disklens.policy", "usr/share/polkit-1/actions/", "644"],
+    ["README.md", "usr/share/doc/disklens/", "644"],
+    ["THIRD_PARTY.md", "usr/share/doc/disklens/", "644"],
+]

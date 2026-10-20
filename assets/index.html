@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DiskLens</title>
+<style>
+:root {
+  --bg: #f6f8fa; --panel: #ffffff; --border: #d0d7de; --text: #1f2328; --dim: #656d76;
+  --good: #2f81f7; --caution: #d29922; --bad: #e5484d; --unknown: #8b949e; --accent: #0f9d8a;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0d1117; --panel: #161b22; --border: #30363d; --text: #e6edf3; --dim: #7d8590; --accent: #2dd4bf; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 17px; margin: 0; color: var(--accent); }
+header .meta { color: var(--dim); font-size: 12px; }
+header .spacer { flex: 1; }
+button { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; cursor: pointer; font: inherit; }
+button:hover { border-color: var(--accent); }
+main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 32px; }
+.warn { background: color-mix(in srgb, var(--caution) 15%, transparent); border: 1px solid var(--caution); border-radius: 6px; padding: 8px 12px; margin-bottom: 10px; }
+.disks { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.disk { min-width: 96px; text-align: center; border: 2px solid var(--c); color: var(--c); background: transparent; border-radius: 8px; padding: 6px 10px; line-height: 1.25; }
+.disk.sel { background: var(--c); color: #fff; }
+.disk small { display: block; opacity: .85; }
+h2 { text-align: center; font-size: 18px; margin: 4px 0 12px; }
+.top { display: grid; grid-template-columns: 170px 1fr; gap: 14px; }
+.box { background: var(--c); color: #fff; border-radius: 8px; padding: 8px; text-align: center; margin-bottom: 8px; }
+.box .t { font-size: 12px; opacity: .9; }
+.box .v { font-size: 24px; font-weight: 700; }
+.box .s { font-size: 17px; }
+.spark { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; height: 64px; width: 100%; }
+dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+dt, dd { margin: 0; padding: 4px 10px; border-bottom: 1px solid var(--border); }
+dt { color: var(--dim); text-align: right; }
+dd { word-break: break-word; }
+.notes { color: var(--caution); margin: 8px 0; }
+.tablewrap { overflow-x: auto; margin-top: 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 4px 8px; text-align: left; white-space: nowrap; }
+th { color: var(--dim); font-weight: 600; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); }
+tr:nth-child(even) td { background: color-mix(in srgb, var(--border) 25%, transparent); }
+td.num, td.mono { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--c); }
+.empty { color: var(--dim); text-align: center; padding: 40px; }
+footer { color: var(--dim); font-size: 12px; text-align: center; margin-top: 20px; }
+@media (max-width: 640px) { .top { grid-template-columns: 1fr; } dt { text-align: left; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>DiskLens</h1>
+  <span class="meta" id="host"></span>
+  <span class="spacer"></span>
+  <label class="meta"><input type="checkbox" id="dec"> raw in decimal</label>
+  <span class="meta" id="updated"></span>
+  <button id="refresh" type="button">Refresh</button>
+</header>
+<main id="main"><div class="empty">Loading…</div></main>
+<footer>Health rules and attribute names ported from CrystalDiskInfo 9.9.3 (MIT). <a href="/metrics" style="color:inherit">Prometheus metrics</a> · <a href="/api/disks" style="color:inherit">JSON</a></footer>
+<script>
+"use strict";
+const COLORS = { good: "var(--good)", caution: "var(--caution)", bad: "var(--bad)", unknown: "var(--unknown)" };
+const LABEL = { good: "Good", caution: "Caution", bad: "Bad", unknown: "Unknown" };
+let state = { disks: [], selected: null, history: {} };
+let token = new URLSearchParams(location.hash.slice(1)).get("token") || sessionStorage.getItem("disklens-token") || "";
+if (token) sessionStorage.setItem("disklens-token", token);
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const temp = t => t == null ? "-- °C" : `${t} °C`;
+const size = b => b >= 1e12 ? (b / 1e12).toFixed(1) + " TB" : b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : b >= 1e6 ? (b / 1e6).toFixed(1) + " MB" : b + " B";
+const gb = g => g == null ? "----" : g >= 10000 ? (g / 1024).toFixed(2) + " TB" : g + " GB";
+const hours = h => h == null ? "----" : h >= 24 ? `${h} h (${Math.floor(h / 24)} d)` : `${h} h`;
+
+async function api(path, opts = {}) {
+  const headers = token ? { Authorization: "Bearer " + token } : {};
+  const r = await fetch(path, { ...opts, headers });
+  if (r.status === 401) {
+    const t = prompt("This DiskLens server needs a token:");
+    if (t) { token = t; sessionStorage.setItem("disklens-token", t); return api(path, opts); }
+    throw new Error("unauthorised");
+  }
+  if (!r.ok) throw new Error(r.status + " " + r.statusText);
+  return r.status === 202 ? null : r.json();
+}
+
+function spark(samples, color) {
+  const pts = samples.map(s => s.temperature_c).filter(t => t != null);
+  if (pts.length < 2) return `<svg class="spark" viewBox="0 0 160 64"><text x="80" y="36" text-anchor="middle" fill="var(--dim)" font-size="11">history</text></svg>`;
+  const lo = Math.min(...pts), hi = Math.max(...pts), span = Math.max(hi - lo, 1);
+  const path = pts.map((t, i) => `${(4 + 152 * i / (pts.length - 1)).toFixed(1)},${(60 - 52 * (t - lo) / span).toFixed(1)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 160 64" preserveAspectRatio="none"><polyline fill="none" stroke="${color}" stroke-width="1.6" points="${path}"/>` +
+    `<text x="4" y="11" fill="var(--dim)" font-size="10">${hi}°</text><text x="4" y="62" fill="var(--dim)" font-size="10">${lo}°</text></svg>`;
+}
+
+function render() {
+  const main = document.getElementById("main");
+  const ds = state.disks;
+  if (!ds.length) { main.innerHTML = `<div class="empty">No disks found.</div>`; return; }
+  if (!ds.some(d => d.name === state.selected)) state.selected = ds[0].name;
+  const d = ds.find(x => x.name === state.selected);
+  const dec = document.getElementById("dec").checked;
+  let html = "";
+  if (!state.privileged) html += `<div class="warn">The server does not run as root, so SMART data may be missing. Start it with <code>sudo</code> or the <code>disklens-web</code> systemd service.</div>`;
+  html += `<div class="disks">` + ds.map(x =>
+    `<button type="button" class="disk ${x.name === d.name ? "sel" : ""}" style="--c:${COLORS[x.health]}" data-name="${esc(x.name)}" title="${esc(x.model)}">` +
+    `${LABEL[x.health]}<small>${temp(x.temperature_c)}</small><small>${esc(x.name)}</small></button>`).join("") + `</div>`;
+  const rot = d.is_ssd ? "---- (SSD)" : d.rotation_rate ? d.rotation_rate + " RPM" : "----";
+  const rows = [
+    ["Firmware", d.firmware], ["Serial Number", d.serial], ["Interface", d.interface], ["Transfer Mode", d.transfer_mode],
+    ["Mount Points", d.mounts.join("  ")], ["Standard", d.standard], ["Features", d.features.join(", ")],
+    ["Host Reads", gb(d.host_reads_gb)], ["Host Writes", gb(d.host_writes_gb)], ["NAND Writes", gb(d.nand_writes_gb)],
+    ["Rotation Rate", rot], ["Power On Count", d.power_on_count ?? "----"], ["Power On Hours", hours(d.power_on_hours)],
+    ["Device", `${d.path} (${d.vendor || "?"}, ${d.source})`],
+  ];
+  html += `<h2>${esc(d.model)} : ${size(d.capacity_bytes)}</h2><div class="top"><div>` +
+    `<div class="box" style="--c:${COLORS[d.health]}"><div class="t">Health Status</div><div class="v">${LABEL[d.health]}</div>${d.life_percent != null ? `<div class="s">${d.life_percent} %</div>` : ""}</div>` +
+    `<div class="box" style="--c:${COLORS[d.temperature_status]}"><div class="t">Temperature</div><div class="v">${temp(d.temperature_c)}</div></div>` +
+    spark(state.history[d.name] || [], COLORS[d.temperature_status]) +
+    `</div><dl>` + rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("") + `</dl></div>`;
+  if (d.notes.length) html += `<div class="notes">${d.notes.map(esc).join("<br>")}</div>`;
+  if (d.attributes.length) {
+    const nvme = d.protocol === "nvme";
+    html += `<div class="tablewrap"><table><thead><tr><th></th><th>ID</th><th>Attribute Name</th>` +
+      (nvme ? "" : `<th>Current</th><th>Worst</th><th>Threshold</th>`) + `<th>Raw Values</th></tr></thead><tbody>` +
+      d.attributes.map(a => `<tr><td><span class="dot" style="--c:${COLORS[a.status]}" title="${LABEL[a.status]}"></span></td>` +
+        `<td class="mono">${a.id.toString(16).toUpperCase().padStart(2, "0")}</td><td>${esc(a.name)}</td>` +
+        (nvme ? "" : `<td class="num">${a.current ?? "---"}</td><td class="num">${a.worst ?? "---"}</td><td class="num">${a.threshold ?? "---"}</td>`) +
+        `<td class="mono">${dec ? a.raw : a.raw_hex}</td></tr>`).join("") + `</tbody></table></div>`;
+  }
+  main.innerHTML = html;
+  main.querySelectorAll(".disk").forEach(b => b.addEventListener("click", () => { state.selected = b.dataset.name; render(); }));
+}
+
+async function load() {
+  try {
+    const snap = await api("/api/disks");
+    state.disks = snap.disks; state.privileged = snap.privileged;
+    state.history = await api("/api/history");
+    document.getElementById("updated").textContent = snap.updated ? "updated " + new Date(snap.updated).toLocaleTimeString() : "first scan running…";
+    render();
+  } catch (e) {
+    document.getElementById("updated").textContent = "error: " + e.message;
+  }
+}
+
+document.getElementById("refresh").addEventListener("click", async () => {
+  await api("/api/refresh", { method: "POST" }).catch(() => {});
+  setTimeout(load, 1500);
+});
+document.getElementById("dec").addEventListener("change", render);
+document.getElementById("host").textContent = location.host;
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>

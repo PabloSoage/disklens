@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DiskLens
+GenericName=Disk Health
+Comment=S.M.A.R.T. disk health with the CrystalDiskInfo evaluation
+Exec=disklens gui
+Icon=drive-harddisk
+Terminal=false
+Categories=System;Monitor;
+Keywords=smart;disk;ssd;nvme;health;temperature;

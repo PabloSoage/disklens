@@ -1,0 +1,28 @@
+[Unit]
+Description=DiskLens web interface (disk S.M.A.R.T. health)
+Documentation=https://github.com/PabloSoage/disklens
+After=local-fs.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Listens on localhost only. To reach it from other machines, override with
+# `systemctl edit disklens-web` and set --bind 0.0.0.0:8086 plus DISKLENS_TOKEN.
+ExecStart=/usr/bin/disklens web --bind 127.0.0.1:8086 --interval 300
+Environment=DISKLENS_TOKEN=
+Restart=on-failure
+# Raw SMART commands need root, but nothing else: no writes outside /tmp, only the two
+# capabilities the ioctls check (SG_IO pass-through and NVMe admin commands).
+CapabilityBoundingSet=CAP_SYS_RAWIO CAP_SYS_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,63 @@
+{
+  "crucial-p2-CT500P2SSD8-P2CR033-win-20261020.json": {
+    "host_reads_gb": 5365,
+    "host_writes_gb": 4339,
+    "life_percent": 98,
+    "power_on_count": 3617,
+    "power_on_hours": 7909,
+    "source": "NVMe 1.4 log 0x02 decoded by tools/expected.py",
+    "temperature_c": 51
+  },
+  "kingston-nv2-SNV2S1000G-SBI02105-win-20261020.json": {
+    "host_reads_gb": 5965,
+    "host_writes_gb": 3309,
+    "life_percent": 100,
+    "power_on_count": 1829,
+    "power_on_hours": 5373,
+    "source": "NVMe 1.4 log 0x02 decoded by tools/expected.py",
+    "temperature_c": 44
+  },
+  "kingston-nv2-SNV2S1000G-nas-20261020.json": {
+    "host_reads_gb": 28471,
+    "host_writes_gb": 44147,
+    "life_percent": 91,
+    "power_on_count": 620,
+    "power_on_hours": 17410,
+    "smart_passed": true,
+    "source": "smartctl 7.5",
+    "temperature_c": 35
+  },
+  "samsung-970evo-500GB-2B2QEXE7-20261020.json": {
+    "host_reads_gb": 93509,
+    "host_writes_gb": 42500,
+    "life_percent": 94,
+    "power_on_count": 4049,
+    "power_on_hours": 4898,
+    "smart_passed": true,
+    "source": "smartctl 7.5",
+    "temperature_c": 33
+  },
+  "seagate-exos-x14-ST12000NM0127-G005-a-20261020.json": {
+    "power_on_count": 26,
+    "power_on_hours": 16372,
+    "smart_passed": true,
+    "source": "smartctl 7.5",
+    "temperature_c": 28
+  },
+  "seagate-exos-x14-ST12000NM0127-G005-b-20261020.json": {
+    "power_on_count": 26,
+    "power_on_hours": 16368,
+    "smart_passed": true,
+    "source": "smartctl 7.5",
+    "temperature_c": 31
+  },
+  "wd-sn530-SDBPNPZ-1T00-21106000-win-20261020.json": {
+    "host_reads_gb": 80510,
+    "host_writes_gb": 46127,
+    "life_percent": 97,
+    "power_on_count": 3746,
+    "power_on_hours": 2152,
+    "source": "NVMe 1.4 log 0x02 decoded by tools/expected.py",
+    "temperature_c": 54
+  }
+}
