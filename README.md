@@ -1,28 +1,63 @@
 # DiskLens
 
-Disk health (S.M.A.R.T.) for Linux, with the evaluation of
+Disk health (S.M.A.R.T.) for Linux and Windows, with the evaluation of
 [CrystalDiskInfo](https://crystalmark.info/en/software/crystaldiskinfo/) ported line by line:
 the same vendor detection (more than 40 SSD vendor and controller tables), the same
 Good / Caution / Bad / Unknown verdict, life, temperature, host writes, and the same attribute
-names. Three front ends share one engine:
+names. One engine, four front ends:
 
 | Front end | Command | For |
 |---|---|---|
 | Terminal UI | `disklens` | SSH sessions, consoles |
 | Plain CLI | `disklens list`, `show`, `check` | scripts, cron, monitoring |
-| Desktop window | `disklens gui` | GNOME, KDE, any X11/Wayland desktop |
+| Desktop window | `disklens gui` | GNOME, KDE, any X11/Wayland desktop, Windows |
 | Web interface + JSON API + Prometheus | `disklens web` | headless servers, NAS |
 
-```
-$ sudo disklens list
-DISK       HEALTH               TEMP      SIZE  MODEL                                    MOUNTS
-sda        Good                28 °C   12.0 TB  ST12000NM0127                            /Volume2
-sdb        Good                30 °C   12.0 TB  ST12000NM0127                            /Volume2
-sdza       Good (91 %)         35 °C    1.0 TB  KINGSTON SNV2S1000G                      / /Volume1 /home
-sdzb       Good (94 %)         33 °C  500.1 GB  Samsung SSD 970 EVO 500GB                /Volume2
-```
+| Platform | Native backend | Fallback | Tested on |
+|---|---|---|---|
+| Linux (x86-64, any distribution) | SG_IO ATA pass-through, NVMe admin ioctls | smartctl | TerraMaster NAS (TOS, kernel 6.12): 2 SATA HDD + 2 NVMe; Ubuntu 24.04 (WSL) |
+| Windows 10/11 | NVMe storage query (no administrator needed), ATA pass-through | smartctl | Windows 11: 3 NVMe |
+| macOS, BSD | none | smartctl (`brew install smartmontools`) | compiled in CI only |
+
+## Screenshots
+
+All screenshots show real disks (two Seagate Exos HDDs, Samsung, Kingston, Crucial and WD
+NVMe drives), loaded from the captures in `tests/captures/`.
+
+**Desktop window** (`disklens gui`)
+
+![GUI, HDD](docs/screenshots/gui-hdd.png)
+
+![GUI, NVMe](docs/screenshots/gui-nvme.png)
+
+**Terminal UI** (`disklens`)
+
+![TUI](docs/screenshots/tui.png)
+
+**CLI** (`disklens list`, `disklens show sda`)
+
+![CLI list](docs/screenshots/cli-list.png)
+
+![CLI show](docs/screenshots/cli-show.png)
+
+**Web interface** (`disklens web`), desktop and phone
+
+![Web](docs/screenshots/web.png)
+
+<img src="docs/screenshots/web-mobile.png" alt="Web on a phone" width="320">
 
 ## Install
+
+Prebuilt binaries are on the [releases page](https://github.com/PabloSoage/disklens/releases):
+
+| File | |
+|---|---|
+| `disklens-*-x86_64-windows.exe` | Windows, all four front ends |
+| `disklens_*_amd64.deb` | Debian / Ubuntu package (binary, desktop entry, systemd unit, polkit policy) |
+| `disklens-*-x86_64-linux-gnu` | Linux, all four front ends (glibc 2.39+) |
+| `disklens-*-x86_64-linux-musl-headless` | Linux, static, terminal + web only: runs on any distribution or NAS |
+
+From source on Linux:
 
 ```sh
 sh scripts/setup.sh                 # build tools (Debian/Ubuntu/Fedora), smartmontools optional
@@ -39,7 +74,7 @@ polkit policy.
 
 ## Permissions
 
-Reading SMART data sends raw commands to the disk, which needs root:
+Reading SMART data sends raw commands to the disk, which on Linux needs root:
 
 - Terminal and CLI: `sudo disklens`.
 - GUI: run it as your user and press **Read as administrator**. It starts
@@ -51,12 +86,17 @@ Reading SMART data sends raw commands to the disk, which needs root:
 Without root every disk is still listed (model, size, mounts from sysfs) with health
 *Unknown* and the reason.
 
+On Windows, NVMe disks are read without administrator rights. SATA disks need it: start the
+console as administrator, or press **Read as administrator** in the window, which restarts it through UAC.
+
 ## How the data is read
 
 | Disk | Native backend |
 |---|---|
 | SATA, and USB-SATA bridges that implement SAT | `SG_IO` + ATA PASS-THROUGH (16), falling back to (12) |
 | NVMe (also NAS systems that rename namespaces, like TerraMaster's `sdz*`) | `NVME_IOCTL_ADMIN_CMD`: Identify Controller / Namespace, log page 0x02 |
+| Windows NVMe | `IOCTL_STORAGE_QUERY_PROPERTY` (protocol-specific Identify and log 0x02) |
+| Windows SATA | `IOCTL_ATA_PASS_THROUGH` |
 | RAID controllers, odd USB bridges | `smartctl -j` (smartmontools), converted back to raw pages |
 
 `--backend auto` (default) tries the native path and falls back to `smartctl` when it is

@@ -14,7 +14,7 @@ use disklens::units;
 
 fn color(h: Health) -> &'static str {
     match h {
-        Health::Good => "\x1b[36m",
+        Health::Good => "\x1b[94m",
         Health::Caution => "\x1b[33m",
         Health::Bad => "\x1b[31m",
         Health::Unknown => "\x1b[90m",
@@ -26,6 +26,18 @@ fn paint(h: Health, s: &str, tty: bool) -> String {
         format!("{}{s}\x1b[0m", color(h))
     } else {
         s.to_string()
+    }
+}
+
+/// Colours need VT mode on Windows; `supports_ansi` turns it on when the console can.
+fn ansi() -> bool {
+    #[cfg(windows)]
+    {
+        crossterm::ansi_support::supports_ansi()
+    }
+    #[cfg(not(windows))]
+    {
+        true
     }
 }
 
@@ -41,20 +53,26 @@ pub fn list(reports: &[DiskReport], json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(reports)?);
         return Ok(());
     }
-    let tty = std::io::stdout().is_terminal();
+    let tty = std::io::stdout().is_terminal() && ansi();
     if reports.is_empty() {
         println!("No disks found.");
         return Ok(());
     }
+    let w = reports
+        .iter()
+        .map(|r| r.name.len())
+        .max()
+        .unwrap_or(4)
+        .max(10);
     println!(
-        "{:<10} {:<16} {:>8} {:>9}  {:<40} MOUNTS",
+        "{:<w$} {:<16} {:>8} {:>9}  {:<40} MOUNTS",
         "DISK", "HEALTH", "TEMP", "SIZE", "MODEL"
     );
     for r in reports {
         let health = format!("{:<16}", health_text(r));
         let temp = format!("{:>8}", units::temperature(r.temperature_c));
         println!(
-            "{:<10} {} {} {:>9}  {:<40} {}",
+            "{:<w$} {} {} {:>9}  {:<40} {}",
             r.name,
             paint(r.health, &health, tty),
             paint(r.temperature_status, &temp, tty),

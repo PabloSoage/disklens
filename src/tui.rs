@@ -213,6 +213,56 @@ fn draw(f: &mut Frame, app: &mut App) {
         f.render_widget(Paragraph::new(msg).style(theme::dim()), zones[2]);
     }
     footer(f, zones[3]);
+    if !truecolor() {
+        downgrade_colors(f.buffer_mut());
+    }
+}
+
+/// Whether the terminal takes 24-bit colour. The classic Windows console without VT mode
+/// does not, and drops RGB colours entirely; there the palette falls back to the 16 basic
+/// colours.
+fn truecolor() -> bool {
+    static T: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *T.get_or_init(|| {
+        #[cfg(windows)]
+        {
+            crossterm::ansi_support::supports_ansi()
+        }
+        #[cfg(not(windows))]
+        {
+            true
+        }
+    })
+}
+
+/// Nearest of the 16 basic colours, by squared RGB distance.
+fn basic(c: Color) -> Color {
+    let Color::Rgb(r, g, b) = c else {
+        return c;
+    };
+    const PALETTE: [(Color, (i32, i32, i32)); 9] = [
+        (Color::Black, (0, 0, 0)),
+        (Color::DarkGray, (110, 110, 110)),
+        (Color::Gray, (190, 190, 190)),
+        (Color::White, (255, 255, 255)),
+        (Color::Blue, (40, 120, 255)),
+        (Color::Cyan, (40, 210, 200)),
+        (Color::Yellow, (220, 170, 30)),
+        (Color::Red, (240, 70, 70)),
+        (Color::Green, (60, 190, 80)),
+    ];
+    let (r, g, b) = (r as i32, g as i32, b as i32);
+    PALETTE
+        .iter()
+        .min_by_key(|(_, (pr, pg, pb))| (r - pr).pow(2) + (g - pg).pow(2) + (b - pb).pow(2))
+        .map_or(c, |(col, _)| *col)
+}
+
+fn downgrade_colors(buf: &mut ratatui::buffer::Buffer) {
+    for cell in buf.content.iter_mut() {
+        cell.fg = basic(cell.fg);
+        cell.bg = basic(cell.bg);
+    }
 }
 
 fn header(f: &mut Frame, area: Rect, app: &App) {
@@ -230,7 +280,10 @@ fn header(f: &mut Frame, area: Rect, app: &App) {
     spans.push(Span::styled(state, theme::dim()));
     if !disklens::device::privileged() && app.opts.from.is_empty() {
         spans.push(Span::styled(
-            "  not root: SMART data may be missing (run with sudo)",
+            format!(
+                "  not elevated: SMART data may be missing ({})",
+                disklens::device::privilege_hint()
+            ),
             Style::default().fg(theme::CAUTION),
         ));
     }
@@ -278,7 +331,7 @@ fn tabs(f: &mut Frame, area: Rect, app: &App) {
 fn body(f: &mut Frame, area: Rect, app: &mut App, r: &DiskReport) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(13), Constraint::Min(5)])
+        .constraints([Constraint::Length(14), Constraint::Min(5)])
         .split(area);
     let top = Layout::default()
         .direction(Direction::Horizontal)
@@ -377,7 +430,8 @@ fn body(f: &mut Frame, area: Rect, app: &mut App, r: &DiskReport) {
         kv("Power On Hours", units::hours(r.power_on_hours)),
     ];
     let title = format!(" {} : {} ", r.model, units::size(r.capacity_bytes));
-    let info = Paragraph::new(info).wrap(Wrap { trim: true }).block(
+    // `trim: false` keeps the padding that right-aligns the labels.
+    let info = Paragraph::new(info).wrap(Wrap { trim: false }).block(
         Block::default()
             .borders(Borders::ALL)
             .title(Span::styled(title, theme::title()))
@@ -566,7 +620,7 @@ mod tests {
             assert!(text.contains(needle), "missing {needle}");
         }
         assert!(
-            !text.contains("not root"),
+            !text.contains("not elevated"),
             "no root banner when reading dumps"
         );
     }

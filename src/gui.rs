@@ -5,8 +5,11 @@
 //! `pkexec disklens stream`, a privileged helper that prints one JSON scan per line, so the
 //! password is asked once and the window itself never runs as root.
 
+#[cfg(not(windows))]
 use std::io::{BufRead, BufReader};
-use std::process::{Child, Command, Stdio};
+use std::process::Child;
+#[cfg(not(windows))]
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -34,6 +37,7 @@ fn health_color(h: Health) -> Color32 {
 
 enum Msg {
     Reports(Vec<DiskReport>),
+    #[cfg_attr(windows, allow(dead_code))]
     HelperFailed(String),
 }
 
@@ -102,7 +106,21 @@ impl App {
         });
     }
 
-    /// Start the privileged helper once; it keeps sending scans until the window closes.
+    /// Windows: start the window again through UAC and close this one.
+    #[cfg(windows)]
+    fn elevate(&mut self, ctx: &egui::Context) {
+        let interval = self.interval.to_string();
+        let backend = format!("{:?}", self.opts.backend).to_lowercase();
+        let args = ["--backend", &backend, "gui", "--interval", &interval];
+        match disklens::device::windows::relaunch_elevated(&args) {
+            Ok(()) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Err(e) => self.status = format!("elevation: {e}"),
+        }
+    }
+
+    /// Linux: start the privileged helper once; it keeps sending scans until the window
+    /// closes.
+    #[cfg(not(windows))]
     fn elevate(&mut self, ctx: &egui::Context) {
         let exe = match std::env::current_exe() {
             Ok(p) => p,
@@ -271,7 +289,7 @@ impl App {
         ui.horizontal(|ui| {
             if !disklens::device::privileged() && self.helper.is_none() && self.opts.from.is_empty()
             {
-                ui.colored_label(CAUTION, "Not running as root: SMART data may be missing.");
+                ui.colored_label(CAUTION, "Not elevated: SMART data may be missing.");
                 if ui.button("Read as administrator").clicked() {
                     self.elevate(ctx);
                 }

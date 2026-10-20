@@ -122,15 +122,14 @@ impl Dump {
 /// Read the raw pages of one disk without analysing them.
 pub fn capture(d: &BlockDevice, backend: Backend) -> Dump {
     let mut dump = Dump::empty(d, "native");
-    #[cfg(target_os = "linux")]
     if backend != Backend::Smartctl {
-        use crate::device::linux;
+        use crate::device::native;
         let native = if d.transport == Transport::Nvme {
-            linux::read_nvme(&d.name).map(|p| dump.set_nvme(&p))
+            native::read_nvme(d).map(|p| dump.set_nvme(&p))
         } else {
-            linux::read_ata(&d.path).map(|r| {
-                dump.set_ata(&r.pages);
-                dump.errors.extend(r.errors);
+            native::read_ata(d).map(|(pages, errors)| {
+                dump.set_ata(&pages);
+                dump.errors.extend(errors);
             })
         };
         match native {

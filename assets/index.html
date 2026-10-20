@@ -27,7 +27,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 32px; }
 .disk.sel { background: var(--c); color: #fff; }
 .disk small { display: block; opacity: .85; }
 h2 { text-align: center; font-size: 18px; margin: 4px 0 12px; }
-.top { display: grid; grid-template-columns: 170px 1fr; gap: 14px; }
+.top { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 14px; }
+.top > * { min-width: 0; }
 .box { background: var(--c); color: #fff; border-radius: 8px; padding: 8px; text-align: center; margin-bottom: 8px; }
 .box .t { font-size: 12px; opacity: .9; }
 .box .v { font-size: 24px; font-weight: 700; }
@@ -47,7 +48,8 @@ td.num, td.mono { font-family: ui-monospace, "SFMono-Regular", Consolas, monospa
 .dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; background: var(--c); }
 .empty { color: var(--dim); text-align: center; padding: 40px; }
 footer { color: var(--dim); font-size: 12px; text-align: center; margin-top: 20px; }
-@media (max-width: 640px) { .top { grid-template-columns: 1fr; } dt { text-align: left; } }
+@media (max-width: 640px) { .top { grid-template-columns: minmax(0, 1fr); } dt { text-align: left; } dl { grid-template-columns: minmax(0, auto) minmax(0, 1fr); } #host, #updated { display: none; } main { padding: 10px; } }
+html, body { overflow-x: hidden; }
 </style>
 </head>
 <body>

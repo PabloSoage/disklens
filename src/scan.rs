@@ -74,27 +74,22 @@ fn platform(d: &BlockDevice, source: &str) -> Platform {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn read_native(d: &BlockDevice, t: &Thresholds) -> Result<DiskReport, String> {
-    use crate::device::linux;
+    use crate::device::native;
     match d.transport {
         Transport::Nvme => {
-            let pages = linux::read_nvme(&d.name).map_err(|e| format!("NVMe admin: {e}"))?;
+            let pages = native::read_nvme(d).map_err(|e| format!("NVMe: {e}"))?;
             smart::analyze_nvme(&pages, platform(d, "native"), t).ok_or("bad NVMe identify".into())
         }
         Transport::Sata | Transport::Usb | Transport::Sas | Transport::Other => {
-            let read = linux::read_ata(&d.path).map_err(|e| format!("ATA pass-through: {e}"))?;
+            let (pages, errors) =
+                native::read_ata(d).map_err(|e| format!("ATA pass-through: {e}"))?;
             let mut p = platform(d, "native");
-            p.notes = read.errors;
-            smart::analyze_ata(&read.pages, p, t).ok_or("bad IDENTIFY".into())
+            p.notes = errors;
+            smart::analyze_ata(&pages, p, t).ok_or("bad IDENTIFY".into())
         }
         Transport::Virtio | Transport::Mmc => Err("no SMART on this kind of device".into()),
     }
-}
-
-#[cfg(not(target_os = "linux"))]
-fn read_native(_d: &BlockDevice, _t: &Thresholds) -> Result<DiskReport, String> {
-    Err("the native backend is Linux-only".into())
 }
 
 fn read_smartctl(d: &BlockDevice, t: &Thresholds) -> Result<DiskReport, String> {
@@ -134,9 +129,10 @@ pub fn read_disk(d: &BlockDevice, opts: &ScanOptions) -> DiskReport {
         Err(e) => {
             notes.push(e);
             if !device::privileged() {
-                notes.push(
-                    "reading SMART data needs root (sudo, pkexec or the systemd service)".into(),
-                );
+                notes.push(format!(
+                    "reading SMART data needs more rights: {}",
+                    device::privilege_hint()
+                ));
             }
             let mut p = platform(d, "sysfs");
             p.notes = notes;

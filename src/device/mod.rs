@@ -1,13 +1,56 @@
 //! Finding disks and reading their raw pages.
 //!
-//! On Linux the native backend talks to the devices directly (SG_IO with ATA PASS-THROUGH
-//! for SATA and USB-SATA bridges, NVMe admin commands for NVMe). When that is not possible
-//! the `smartctl` backend reads the same data through smartmontools, which knows many more
-//! bridges and RAID controllers. Other systems only get the `smartctl` backend.
+//! The native backend talks to the devices directly:
+//! - Linux: SG_IO with ATA PASS-THROUGH for SATA and USB-SATA bridges, NVMe admin commands.
+//! - Windows: `IOCTL_STORAGE_QUERY_PROPERTY` for NVMe, `IOCTL_ATA_PASS_THROUGH` for SATA.
+//!
+//! When that is not possible the `smartctl` backend reads the same data through
+//! smartmontools, which knows many more bridges and RAID controllers. Other systems (macOS,
+//! the BSDs) only get the `smartctl` backend.
 
 #[cfg(target_os = "linux")]
 pub mod linux;
 pub mod smartctl;
+#[cfg(windows)]
+pub mod windows;
+
+/// The native reads, behind one interface for every OS.
+pub mod native {
+    use super::BlockDevice;
+    use crate::smart::{ata::AtaPages, nvme::NvmePages};
+    use std::io;
+
+    #[cfg(target_os = "linux")]
+    pub fn read_nvme(d: &BlockDevice) -> io::Result<NvmePages> {
+        super::linux::read_nvme(&d.name)
+    }
+    #[cfg(target_os = "linux")]
+    pub fn read_ata(d: &BlockDevice) -> io::Result<(AtaPages, Vec<String>)> {
+        super::linux::read_ata(&d.path).map(|r| (r.pages, r.errors))
+    }
+
+    #[cfg(windows)]
+    pub fn read_nvme(d: &BlockDevice) -> io::Result<NvmePages> {
+        super::windows::read_nvme(&d.path)
+    }
+    #[cfg(windows)]
+    pub fn read_ata(d: &BlockDevice) -> io::Result<(AtaPages, Vec<String>)> {
+        super::windows::read_ata(&d.path).map(|r| (r.pages, r.errors))
+    }
+
+    #[cfg(not(any(target_os = "linux", windows)))]
+    pub fn read_nvme(_d: &BlockDevice) -> io::Result<NvmePages> {
+        Err(io::Error::other(
+            "no native backend on this OS, install smartmontools",
+        ))
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
+    pub fn read_ata(_d: &BlockDevice) -> io::Result<(AtaPages, Vec<String>)> {
+        Err(io::Error::other(
+            "no native backend on this OS, install smartmontools",
+        ))
+    }
+}
 
 use serde::{Deserialize, Serialize};
 
@@ -76,9 +119,22 @@ pub fn discover() -> Vec<BlockDevice> {
     {
         linux::discover()
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(windows)]
+    {
+        windows::discover()
+    }
+    #[cfg(not(any(target_os = "linux", windows)))]
     {
         smartctl::discover()
+    }
+}
+
+/// How to get the rights `privileged` checks, for messages.
+pub fn privilege_hint() -> &'static str {
+    if cfg!(windows) {
+        "run it as administrator (NVMe disks work without it)"
+    } else {
+        "run it as root (sudo, pkexec or the systemd service)"
     }
 }
 
@@ -89,7 +145,11 @@ pub fn privileged() -> bool {
         // SAFETY: geteuid has no preconditions.
         unsafe { libc::geteuid() == 0 }
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        windows::is_admin()
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         false
     }
