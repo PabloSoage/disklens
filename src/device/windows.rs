@@ -238,6 +238,10 @@ pub fn discover() -> Vec<BlockDevice> {
                     .map(|s| u64::from_le_bytes(s.try_into().unwrap()))
             })
             .unwrap_or(0);
+        // Card readers without a card report no size; like empty slots on Linux, skip them.
+        if size == 0 {
+            continue;
+        }
         out.push(BlockDevice {
             name: format!("PhysicalDrive{n}"),
             path,

@@ -3,10 +3,13 @@ that does not share code with disklens.
 
 - With a `smartctl -j -a` file for the same disk (taken at the same time), the values come
   from smartmontools.
+- With `cdi:<DiskInfo.txt>` the values come from CrystalDiskInfo's own report, for disks
+  whose pages were taken from that same report (tools/cdi_to_dumps.py).
 - Without one (NVMe captured on Windows), the SMART / Health log is decoded here from the
   NVMe 1.4 specification (figure 194), independently of src/smart/nvme.rs.
 
-Usage: python -I tools/expected.py <out.json> <capture.json>[=<smartctl.json>] ...
+Usage: python -I tools/expected.py <expected.json> <capture.json>[=<smartctl.json>|=cdi:<DiskInfo.txt>] ...
+(entries are merged into an existing expected.json)
 """
 import json
 import sys
@@ -50,13 +53,47 @@ def from_smartctl(s):
     return out
 
 
+def from_cdi(path, model):
+    """Values from CrystalDiskInfo's DiskInfo.txt, for the block of this model."""
+    import re
+
+    text = open(path, encoding="utf-8-sig").read()
+    blocks = re.split(r"-{70,}\n \(\d+\) (.*)\n-{70,}\n", text)
+    for i in range(1, len(blocks), 2):
+        if blocks[i].strip() != model:
+            continue
+        b = blocks[i + 1]
+
+        def num(key):
+            m = re.search(key + r" : ([\d.,]+)", b)
+            return int(re.sub(r"[.,]", "", m.group(1))) if m else None
+
+        out = {"source": "CrystalDiskInfo 9.9.3 DiskInfo.txt"}
+        for key, field in [("Temperature", "temperature_c"), ("Power On Hours", "power_on_hours"),
+                           ("Power On Count", "power_on_count"), ("Host Reads", "host_reads_gb"),
+                           ("Host Writes", "host_writes_gb"), ("NAND Writes", "nand_writes_gb")]:
+            v = num(key)
+            if v is not None:
+                out[field] = v
+        m = re.search(r"Health Status : \S+ \((\d+) %\)", b)
+        if m:
+            out["life_percent"] = int(m.group(1))
+        return out
+    raise SystemExit(f"{model} not in {path}")
+
+
 def main():
     out_path = sys.argv[1]
-    result = {}
+    try:
+        result = json.load(open(out_path, encoding="utf-8"))
+    except FileNotFoundError:
+        result = {}
     for arg in sys.argv[2:]:
         cap, _, ref = arg.partition("=")
         d = json.load(open(cap, encoding="utf-8-sig"))
-        if ref:
+        if ref.startswith("cdi:"):
+            exp = from_cdi(ref[4:], d["device"]["model"])
+        elif ref:
             exp = from_smartctl(json.load(open(ref, encoding="utf-8-sig")))
         elif d.get("nvme_smart_log"):
             exp = from_nvme_log(d["nvme_smart_log"])

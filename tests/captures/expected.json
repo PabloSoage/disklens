@@ -1,4 +1,38 @@
 {
+  "cdi-kingston-sa400-SA400S37120G-03150002-20261020.json": {
+    "host_reads_gb": 1022,
+    "host_writes_gb": 1512,
+    "life_percent": 99,
+    "nand_writes_gb": 1867,
+    "power_on_count": 2973,
+    "power_on_hours": 8028,
+    "source": "CrystalDiskInfo 9.9.3 DiskInfo.txt",
+    "temperature_c": 22
+  },
+  "cdi-samsung-970evo-500GB-20261020.json": {
+    "host_reads_gb": 18278,
+    "host_writes_gb": 13331,
+    "life_percent": 98,
+    "power_on_count": 4503,
+    "power_on_hours": 1079,
+    "source": "CrystalDiskInfo 9.9.3 DiskInfo.txt",
+    "temperature_c": 32
+  },
+  "cdi-seagate-ironwolf-pro-ST4000NE001-20261020.json": {
+    "power_on_count": 879,
+    "power_on_hours": 3412,
+    "source": "CrystalDiskInfo 9.9.3 DiskInfo.txt",
+    "temperature_c": 29
+  },
+  "cdi-wd-black-sn770-1TB-731150WD-20261020.json": {
+    "host_reads_gb": 25749,
+    "host_writes_gb": 19913,
+    "life_percent": 99,
+    "power_on_count": 484,
+    "power_on_hours": 2519,
+    "source": "CrystalDiskInfo 9.9.3 DiskInfo.txt",
+    "temperature_c": 42
+  },
   "crucial-p2-CT500P2SSD8-P2CR033-win-20261020.json": {
     "host_reads_gb": 5365,
     "host_writes_gb": 4339,

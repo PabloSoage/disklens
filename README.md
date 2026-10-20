@@ -16,7 +16,7 @@ names. One engine, four front ends:
 | Platform | Native backend | Fallback | Tested on |
 |---|---|---|---|
 | Linux (x86-64, any distribution) | SG_IO ATA pass-through, NVMe admin ioctls | smartctl | TerraMaster NAS (TOS, kernel 6.12): 2 SATA HDD + 2 NVMe; Ubuntu 24.04 (WSL) |
-| Windows 10/11 | NVMe storage query (no administrator needed), ATA pass-through | smartctl | Windows 11: 3 NVMe |
+| Windows 10/11 | NVMe storage query (no administrator needed), ATA pass-through | smartctl | Windows 11: 5 NVMe, a SATA SSD (Kingston A400) and a SATA HDD (IronWolf Pro), checked against CrystalDiskInfo |
 | macOS, BSD | none | smartctl (`brew install smartmontools`) | compiled in CI only |
 
 ## Screenshots
@@ -138,9 +138,25 @@ disklens --from dumps/ show       # the same analysis, on any machine, without t
 ```
 
 A dump holds the raw IDENTIFY / SMART / NVMe pages. `tools/redact_dump.py` removes the
-serial number before you share it. Real dumps in `tests/captures/` are regression tests:
-their expected values come from smartctl or from an independent decoder
+serial number before you share it. Real dumps in `tests/captures/` (11 disks) are regression
+tests: their expected values come from CrystalDiskInfo, smartctl or an independent decoder
 (`tools/expected.py`), never from DiskLens.
+
+### Checking against CrystalDiskInfo
+
+On Windows, run `DiskInfo64.exe /CopyExit` as administrator. Its `DiskInfo.txt` includes the
+raw pages it read, so both programs can analyse exactly the same bytes:
+
+```sh
+python -I tools/cdi_to_dumps.py DiskInfo.txt cdi-dumps/      # pages -> disklens dumps
+disklens --from cdi-dumps/ show --json > disklens.json
+python -I tools/compare_cdi.py DiskInfo.txt disklens.json    # field by field
+```
+
+On four disks (WD SN770, Samsung 970 EVO, Kingston A400, Seagate IronWolf Pro), 268 of 269
+values match. The remaining one is a host-read-command counter that CrystalDiskInfo itself
+read twice: the value in its own table differs from the bytes it printed, and DiskLens
+matches the bytes.
 
 ## Building
 
